@@ -1,4 +1,6 @@
 // threadfuncs.cpp
+#include <thread>
+#include <chrono>
 #include "threadfuncs.h"
 
 #include <iostream>
@@ -15,18 +17,20 @@ Logger::Logger(const std::string& filename)
     throw std::runtime_error("Cannot open log file: " + filename);
   }
 }
-
+Logger logger("output.log");
 Logger::~Logger() {
   // std::ofstream close file here automatically
 }
 
-void Logger::writeLine(const std::string& msg) {
-  std::lock_guard<std::mutex> lock(mutex_);
+bool Logger::writeLine(const std::string& msg) {
+std::lock_guard<std::mutex> lock(mutex_);  
   file_ << msg;
   file_.flush();
   if (!file_) {
     std::cerr << "write failed: " << msg << "\n";
+    return false;
   }
+  return true;
 }
 
 pid_t getThreadID() {
@@ -46,6 +50,7 @@ void funcThread(const ThreadArgs& args, Logger& logger) {
         << "] pid = "  << ::getpid()
         << " ppid = "  << ::getppid()
         << " tid = "   << getThreadID()
+<< " cpp_id = " << std::this_thread::get_id()
         << " iter = "  << i
         << "\n";
     logger.writeLine(oss.str());

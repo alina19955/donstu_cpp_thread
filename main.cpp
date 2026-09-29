@@ -1,40 +1,101 @@
 #include <iostream>
-#include <vector>
+#include <fstream>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <string>
 
-#include "threadfuncs.h"
+
+class Logger {
+private:
+    std::ofstream log_file;
+    std::mutex log_mtx;
+
+public:
+    Logger(const std::string& filename) {
+        log_file.open(filename, std::ios::out);
+    }
+
+    ~Logger() {
+        if (log_file.is_open()) {
+            log_file.close();
+        }
+    }
+
+    void writeLine(const std::string& text) {
+        std::lock_guard<std::mutex> lock(log_mtx);
+        if (log_file.is_open()) {
+            log_file << text << std::endl;
+        }
+    }
+};
+
+
+std::mutex m;
+std::condition_variable cv;
+
+int buffer = 0;       
+bool ready = false;     
+bool done = false;     
+
+
+void producer() {
+    for (int i = 1; i <= 10; ++i) {
+        {
+            std::unique_lock<std::mutex> lock(m);
+    
+            cv.wait(lock, [] { return !ready; });
+
+            buffer = i;   // Кладем значение в буфер
+            ready = true; // Сигнализируем, что данные готовы
+        }
+        cv.notify_one();  // Будим потребителя
+    }
+
+
+    {
+        std::unique_lock<std::mutex> lock(m);
+
+        cv.wait(lock, [] { return !ready; });
+        done = true; 
+    }
+    cv.notify_one(); 
+}
+
+
+void consumer(Logger& logger) {
+    while (true) {
+        int item = 0;
+        {
+            std::unique_lock<std::mutex> lock(m);
+      
+            cv.wait(lock, [] { return ready || done; });
+
+      
+            if (!ready && done) {
+                break;
+            }
+
+            item = buffer; // Забираем значение из буфера
+            ready = false; // Помечаем буфер как пустой
+        }
+        cv.notify_one(); 
+
+        // Запись в файл через logger
+        logger.writeLine("[Consumer] Забрал значение: " + std::to_string(item));
+    }
+}
 
 int main() {
-  about();
+    Logger logger("output.log");
 
-  // Open log file
-  Logger logger("output.log");
+    std::thread prod(producer);
+    std::thread cons(consumer, std::ref(logger));
 
-  std::cout << "main: pid = " << getThreadID()
-            << ", opened file: 'output.log'\n";
+    prod.join();
+    cons.join();
 
-  // args for threads
-  std::vector<ThreadArgs> args = {
-    {1, "First"},
-    {2, "Second"},
-    {3, "Third"},
-    {4, "Fourth"},
-  };
+    std::cout << "Передача завершена. Проверьте output.log" << std::endl;
 
-  // thread are starting
-  std::vector<std::thread> threads;
-  threads.reserve(COUNT_THREADS);
-
-  for (int i = 0; i < COUNT_THREADS; ++i) {
-    threads.emplace_back(funcThread, std::cref(args[i]), std::ref(logger));
-  }
-
-  // wait for stop all threads
-  for (auto& t : threads) {
-    if (t.joinable()) t.join();
-  }
-
-  // close file automatically
-  std::cout << "main: all threads finished, file closed\n";
-  return 0;
+    return 0;
 }

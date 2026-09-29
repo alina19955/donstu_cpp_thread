@@ -5,9 +5,10 @@
 #include <fstream>
 
 // count of threads and iterations
-constexpr int COUNT_THREADS    = 4;
-constexpr int COUNT_ITERATIONS = 3;
-
+ constexpr int COUNT_THREADS = 4;
+ constexpr int COUNT_ITERATIONS = 1000;
+//#define COUNT_THREADS 4
+//#define COUNT_ITERATIONS 3
 // args for thread
 struct ThreadArgs {
   int         id;
@@ -21,7 +22,7 @@ public:
   ~Logger();
 
   // write line with mutex
-  void writeLine(const std::string& msg);
+  bool writeLine(const std::string& msg);
 
   // block copy and move
   Logger(const Logger&)            = delete;
